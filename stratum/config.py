@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .portfolio_csv import load_positions_input
+
 
 ALLOCATION_TEMPLATES = {
     "conservative": {"Equities": 30, "Bonds": 45, "Cash": 20, "REITs": 5},
@@ -49,6 +51,14 @@ DEFAULT_FORM_VALUES = {
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 MARKET_DATA_TICKER_LIMIT = 5
+
+
+def build_default_form_values() -> dict[str, str]:
+    values = dict(DEFAULT_FORM_VALUES)
+    imported_positions = load_positions_input()
+    if imported_positions:
+        values["positions"] = imported_positions
+    return values
 
 
 def load_local_env(env_path: str = ".env") -> None:

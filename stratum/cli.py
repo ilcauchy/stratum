@@ -11,6 +11,7 @@ from .formatters import (
 )
 from .models import AnalysisResult, InvestorProfile, MarketDataSnapshot
 from .parsing import parse_non_negative_float, parse_positions, parse_positive_int
+from .portfolio_csv import load_positions_input
 
 
 def ask_non_negative_float(prompt: str) -> float:
@@ -56,11 +57,19 @@ def collect_profile() -> InvestorProfile:
     drawdown = ask_positive_int("Maximum drawdown you can tolerate (%, e.g. 15): ")
     objective = ask_choice("Primary objective", OBJECTIVE_LABELS)
 
+    imported_positions = load_positions_input()
+    positions_prompt = "Current holdings (optional, format VTI:30000,BND:15000): "
+    if imported_positions:
+        positions_prompt = (
+            "Current holdings (blank uses data/portfolio.cleaned.csv): "
+        )
+
     while True:
         try:
-            positions = parse_positions(
-                input("Current holdings (optional, format VTI:30000,BND:15000): ")
-            )
+            raw_positions = input(positions_prompt)
+            if not raw_positions.strip() and imported_positions:
+                raw_positions = imported_positions
+            positions = parse_positions(raw_positions)
             break
         except ValueError as error:
             print(error)

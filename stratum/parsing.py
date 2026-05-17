@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .config import DEFAULT_FORM_VALUES, OBJECTIVE_LABELS
+from .config import OBJECTIVE_LABELS, build_default_form_values
 from .models import InvestorProfile
 
 
@@ -76,7 +76,7 @@ def build_profile(
 
 
 def validate_profile_form(form_data: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
-    values = dict(DEFAULT_FORM_VALUES)
+    values = build_default_form_values()
     values.update({key: value.strip() for key, value in form_data.items() if key in values})
 
     errors: dict[str, str] = {}

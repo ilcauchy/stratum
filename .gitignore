@@ -1,2 +1,6 @@
 .env
 __pycache__/
+.DS_Store
+.idea/
+data/cache/
+data/portfolio*.csv

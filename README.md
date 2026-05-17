@@ -9,11 +9,15 @@ Current capabilities:
 - Check position concentration and cash weight
 - Produce contribution and rebalancing guidance
 - Pull the latest provider quote data for holdings tickers through Alpha Vantage
+- Rebuild a portfolio dashboard from transaction history in `data/portfolio.cleaned.csv`
+- Clean a raw Yahoo Finance export into a reconciled transaction ledger
 - Render the workflow in a local web page
 
 ## Project Layout
 
 ```text
+clean_portfolio_csv.py  # turns raw Yahoo exports into cleaned ledger files
+data/                   # raw and cleaned portfolio CSV files
 stratum/
   analysis.py      # portfolio logic and allocation rules
   app.py           # CLI/Web entry wiring
@@ -23,6 +27,8 @@ stratum/
   market_data.py   # Alpha Vantage client and quote snapshots
   models.py        # dataclasses for profiles, results, and quotes
   parsing.py       # input parsing and validation
+  performance.py   # portfolio performance windows and chart inputs
+  portfolio_csv.py # transaction parsing, holdings, and CSV reconciliation
   web.py           # HTML rendering and HTTP server
 main.py            # thin executable entrypoint
 test_main.py       # regression tests
@@ -78,6 +84,31 @@ export ALPHAVANTAGE_ENTITLEMENT=delayed
 
 The app uses Alpha Vantage's `GLOBAL_QUOTE` endpoint for holdings tickers. Without premium entitlements, the latest quote may be end-of-day rather than real-time for some markets.
 
+## Portfolio CSV Cleaning
+
+The dashboard reads `data/portfolio.cleaned.csv`. If you start from a raw Yahoo Finance export, clean it first:
+
+```bash
+python3 clean_portfolio_csv.py
+```
+
+By default this reads `data/portfolio.csv` and writes `data/portfolio.cleaned.csv`.
+It also auto-reconciles any symbol whose ending quantity is negative by adding a synthetic row back to `0`, which is useful when dividend reinvestments or similar adjustments were missing from the raw export.
+
+If a symbol was oversold because dividend reinvestments or other adjustments were missing from the raw export, add a synthetic reconciliation row to force the ending quantity you expect:
+
+```bash
+python3 clean_portfolio_csv.py --zero-symbol AAPL --zero-symbol ARKW
+```
+
+You can also force an exact ending quantity:
+
+```bash
+python3 clean_portfolio_csv.py --set-position SOFI=120
+```
+
+The script prints reconciliation notes so you can see which synthetic rows were added.
+
 ## Inputs
 
 - Investable capital
@@ -103,7 +134,7 @@ QQQ:10000
 
 ## Scope
 
-This project now supports live provider-backed quote lookups, but it still does not connect to brokers, research feeds, portfolio backtests, or transaction history. Right now it is best used as:
+This project now supports live provider-backed quote lookups and transaction-history-driven dashboard views, but it still does not connect to brokers, research feeds, or automatic corporate action reconciliation. Right now it is best used as:
 
 - A personal investment planning tool
 - An allocation discussion prototype

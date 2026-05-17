@@ -14,6 +14,7 @@ from .models import (
 
 
 TRANSACTION_TYPES = {"BUY", "SELL"}
+DEFAULT_RAW_PORTFOLIO_CSV_PATH = "data/portfolio.csv"
 DEFAULT_PORTFOLIO_CSV_PATH = "data/portfolio.cleaned.csv"
 DEFAULT_PORTFOLIO_HEADERS = [
     "Symbol",
@@ -122,6 +123,16 @@ def build_net_positions(rows: list[dict[str, str]]) -> dict[str, float]:
         else:
             positions[symbol] = positions.get(symbol, 0.0) - quantity
     return positions
+
+
+def build_default_expected_positions(
+    rows: list[dict[str, str]], tolerance: float = 1e-6
+) -> dict[str, float]:
+    expected_positions: dict[str, float] = {}
+    for symbol, quantity in build_net_positions(rows).items():
+        if quantity < -tolerance:
+            expected_positions[symbol] = 0.0
+    return expected_positions
 
 
 def build_current_holdings(
@@ -331,6 +342,24 @@ def load_portfolio_dashboard(
     )
 
 
+def clean_portfolio_csv(
+    source: str | Path,
+    target: str | Path = DEFAULT_PORTFOLIO_CSV_PATH,
+    expected_positions: dict[str, float] | None = None,
+) -> tuple[Path, list[str]]:
+    headers, rows = load_portfolio_csv(source)
+    resolved_positions = build_default_expected_positions(rows)
+    if expected_positions:
+        resolved_positions.update(expected_positions)
+
+    cleaned_rows, notes = reconcile_positions(headers, rows, resolved_positions)
+
+    target_path = Path(target)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    write_portfolio_csv(target_path, headers, cleaned_rows)
+    return target_path, notes
+
+
 def build_reconciliation_row(
     symbol: str,
     discrepancy: float,
@@ -418,11 +447,13 @@ def main() -> None:
     args = parser.parse_args()
 
     expected_positions = {symbol: 0.0 for symbol in args.zero_symbol}
-    headers, rows = load_portfolio_csv(args.source)
-    cleaned_rows, notes = reconcile_positions(headers, rows, expected_positions)
-    write_portfolio_csv(args.target, headers, cleaned_rows)
+    target_path, notes = clean_portfolio_csv(
+        source=args.source,
+        target=args.target,
+        expected_positions=expected_positions,
+    )
 
-    print(f"Wrote cleaned CSV to {args.target}")
+    print(f"Wrote cleaned CSV to {target_path}")
     if notes:
         for note in notes:
             print(note)

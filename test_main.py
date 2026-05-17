@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 from stratum import (
     DEFAULT_FORM_VALUES,
+    DEFAULT_PORTFOLIO_CSV_PATH,
     InvestorProfile,
     MarketQuote,
     build_default_form_values,
     build_current_holdings,
+    build_default_expected_positions,
     build_holding_history,
     build_net_positions,
     build_market_data_snapshot,
@@ -19,6 +21,7 @@ from stratum import (
     build_portfolio_performance,
     build_position_market_values,
     build_transactions,
+    clean_portfolio_csv,
     determine_risk_level,
     format_positions_input,
     load_portfolio_csv,
@@ -260,6 +263,29 @@ class StratumTests(unittest.TestCase):
         self.assertIn("Synthetic reconciliation", cleaned_rows[-1]["Comment"])
         self.assertTrue(notes)
 
+    def test_build_default_expected_positions_zeroes_oversold_symbols(self):
+        rows = [
+            {
+                "Symbol": "AAPL",
+                "Quantity": "50",
+                "Transaction Type": "BUY",
+            },
+            {
+                "Symbol": "AAPL",
+                "Quantity": "51",
+                "Transaction Type": "SELL",
+            },
+            {
+                "Symbol": "MSFT",
+                "Quantity": "10",
+                "Transaction Type": "BUY",
+            },
+        ]
+
+        expected_positions = build_default_expected_positions(rows)
+
+        self.assertEqual(expected_positions, {"AAPL": 0.0})
+
     def test_portfolio_csv_round_trip(self):
         headers = ["Symbol", "Quantity", "Transaction Type"]
         rows = [{"Symbol": "QQQ", "Quantity": "10", "Transaction Type": "BUY"}]
@@ -270,6 +296,58 @@ class StratumTests(unittest.TestCase):
 
         self.assertEqual(loaded_headers, headers)
         self.assertEqual(loaded_rows, rows)
+
+    def test_clean_portfolio_csv_writes_reconciled_output(self):
+        headers = [
+            "Symbol",
+            "Current Price",
+            "Trade Date",
+            "Purchase Price",
+            "Quantity",
+            "Commission",
+            "Comment",
+            "Transaction Type",
+        ]
+        rows = [
+            {
+                "Symbol": "AAPL",
+                "Current Price": "271.06",
+                "Trade Date": "20210223",
+                "Purchase Price": "120.72",
+                "Quantity": "50",
+                "Commission": "",
+                "Comment": "",
+                "Transaction Type": "BUY",
+            },
+            {
+                "Symbol": "AAPL",
+                "Current Price": "271.06",
+                "Trade Date": "20250716",
+                "Purchase Price": "210.7",
+                "Quantity": "51",
+                "Commission": "",
+                "Comment": "",
+                "Transaction Type": "SELL",
+            },
+        ]
+        with TemporaryDirectory() as tmpdir:
+            source_path = Path(tmpdir) / "portfolio.csv"
+            target_path = Path(tmpdir) / DEFAULT_PORTFOLIO_CSV_PATH
+            write_portfolio_csv(source_path, headers, rows)
+
+            written_path, notes = clean_portfolio_csv(
+                source=source_path,
+                target=target_path,
+            )
+
+            self.assertEqual(written_path, target_path)
+            self.assertTrue(written_path.exists())
+            _, cleaned_rows = load_portfolio_csv(written_path)
+
+        self.assertTrue(notes)
+        self.assertEqual(build_net_positions(cleaned_rows)["AAPL"], 0.0)
+        self.assertEqual(cleaned_rows[-1]["Transaction Type"], "BUY")
+        self.assertEqual(cleaned_rows[-1]["Quantity"], "1")
 
     def test_build_position_market_values_keeps_positive_positions_only(self):
         rows = [
